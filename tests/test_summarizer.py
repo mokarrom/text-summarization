@@ -1,16 +1,17 @@
+import json
 import os.path
 from pytest import raises
 from summarizer.model.summarizer import SummarizerFactory, TextSummarizer
-from summarizer.model.gpt3_summarizer import count_tokens
+from summarizer.model.gpt_summarizer import count_tokens, count_tokens_v2
 
 MOCKED_SUMMARY = ["mocked summary " + str(i + 1) for i in range(4)]
 
 
 def test_text_summarizer(sample_file, mocker):
     gpt3_summarizer = SummarizerFactory.create_summarizer("gpt3")
-    gpt3_summarizer.text_tokens = 100
+    gpt3_summarizer.max_prompt_tokens = 233
 
-    mock_summarizer = mocker.patch("summarizer.model.gpt3_summarizer.Gpt3Summarizer.summarize")
+    mock_summarizer = mocker.patch("summarizer.model.gpt_summarizer.Gpt3Summarizer.summarize")
     mock_summarizer.side_effect = MOCKED_SUMMARY
     text_summarizer = TextSummarizer(gpt3_summarizer)
 
@@ -18,6 +19,31 @@ def test_text_summarizer(sample_file, mocker):
         text = file_obj.read()
         summary = text_summarizer.summarize_text(text)
         assert summary == " ".join(MOCKED_SUMMARY)
+
+
+def test_chapter_summarizer(resource_path):
+    file_path = os.path.join(resource_path, "chapter", "1232-chapters_19.txt.json")
+    chapters = []
+    with open(file_path) as fp:
+        chap_data = json.load(fp)
+        book_tokens = 0
+        for chapter in chap_data["chapters"]:
+            chap_tokens = count_tokens_v2(chapter['text'])
+            print(f"id={chapter['id']}, tokens: {chap_tokens}")
+            book_tokens += chap_tokens
+            chapters.append(chapter['text'])
+        print(f"book tokens: {book_tokens}")
+
+    primary_summarizer = SummarizerFactory.create_summarizer("gpt4")
+    primary_summarizer.max_tokens = 2000
+    primary_summarizer.update_sum_ratio(primary_summarizer.sum_ratio)
+
+    secondary_summarizer = SummarizerFactory.create_summarizer("gpt3.5")
+    secondary_summarizer.max_tokens = 1000
+
+    text_summarizer = TextSummarizer(primary_summarizer, secondary_summarizer)
+    # summary = text_summarizer.summarize_chapters(chapters)
+    # print(json.dumps(summary, indent=4, sort_keys=False))
 
 
 def test_max_tokens(resource_path):
@@ -28,7 +54,7 @@ def test_max_tokens(resource_path):
 
     index = 0
     largest_chunk = ""
-    while len(largest_chunk) < 4 * gpt3_summarizer.text_tokens:
+    while len(largest_chunk) < 4 * gpt3_summarizer.max_prompt_tokens:
         largest_chunk = largest_chunk + " " + words[index]
         index += 1
 
@@ -63,3 +89,7 @@ def test_count_tokens():
     assert count_tokens(text1) == 43
     assert count_tokens(text2) == 26
     assert count_tokens(text3) == 86
+
+    assert count_tokens_v2(text1) == 46
+    assert count_tokens_v2(text2) == 26
+    assert count_tokens_v2(text3) == 66

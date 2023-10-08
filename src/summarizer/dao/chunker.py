@@ -3,7 +3,7 @@ import logging
 from typing import Iterator, List, Tuple
 from dataclasses import dataclass
 from nltk.tokenize import sent_tokenize
-from summarizer.model.gpt3_summarizer import count_tokens
+from summarizer.model.gpt_summarizer import count_tokens, count_tokens_v2
 
 PARA_REGEX = r"(?:\r?\n){2,}"
 """Greedily match two or more new-lines in Windows/Linux/Mac."""
@@ -117,6 +117,48 @@ class TextChunker:
             counter += 1
             yield Chunk(counter, chunk_tokens, doc_id, tuple(chunk_paragraphs))
 
+    def chunk_generator_from_chapters(self, chapters: List[str], doc_id: str) -> Iterator[Chunk]:
+        def chunk_generator_from_chapter(chapter_text: str) -> Iterator[Chunk]:
+            """Iterate a paragraph(str) by chunk. A chunk consist of a set of sentences/paragraphs."""
+            nonlocal counter, chunk_tokens
+            chunk_paragraphs = []
+            for paragraph in re.split(PARA_REGEX, chapter_text.strip()):
+                para_tokens = count_tokens_v2(paragraph)
+                if para_tokens > self.max_tokens:
+                    logger.error(f"Skipping very long paragraph, tokens: {para_tokens}, max_tokens: {self.max_tokens}")
+                    continue
+                if chunk_tokens + para_tokens > self.max_tokens:
+                    counter += 1
+                    chunk_chapters.append("\n\n".join(chunk_paragraphs))
+                    yield Chunk(counter, chunk_tokens, doc_id, tuple(chunk_chapters))
+                    chunk_chapters.clear()
+                    chunk_paragraphs = [paragraph]
+                    chunk_tokens = para_tokens
+                else:
+                    chunk_tokens += (para_tokens + 1 if chunk_chapters and not chunk_paragraphs else para_tokens)
+                    chunk_paragraphs.append(paragraph)
+            if chunk_paragraphs:
+                chunk_chapters.append("\n\n".join(chunk_paragraphs))
 
+        counter = 0
+        chunk_tokens = 0
+        chunk_chapters: List[str] = []
+        for chapter in chapters:
+            chap_tokens = count_tokens_v2(chapter)
+            if chap_tokens > self.max_tokens:
+                logger.warning(f"Too long chapter, tokens: {chap_tokens}, max_tokens: {self.max_tokens}, "
+                               f"Document: {doc_id}: Chunking a long chapter.")
+                yield from chunk_generator_from_chapter(chapter)
+            elif chunk_tokens + chap_tokens > self.max_tokens:
+                counter += 1
+                yield Chunk(counter, chunk_tokens, doc_id, tuple(chunk_chapters))
+                chunk_chapters = [chapter]
+                chunk_tokens = chap_tokens
+            else:
+                chunk_tokens += (chap_tokens + 1 if chunk_chapters else chap_tokens)
+                chunk_chapters.append(chapter)
+        if chunk_chapters:
+            counter += 1
+            yield Chunk(counter, chunk_tokens, doc_id, tuple(chunk_chapters))
 
 

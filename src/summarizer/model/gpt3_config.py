@@ -6,9 +6,6 @@ top_p = 1.0
 frequency_penalty = 0.0
 presence_penalty = 1
 
-token_ratio = 0.90
+sum_ratio = 0.10
 """The ratio of number of tokens used in text and summary."""
-text_tokens = int(token_ratio * max_tokens)
-"""The maximum number of tokens used for text (i.e., prompt)"""
-summary_token = max_tokens - text_tokens
-"""The maximum number of tokens used for summary (i.e., completion)"""
+

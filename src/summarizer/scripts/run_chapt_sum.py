@@ -1,4 +1,6 @@
 """Summarise chapter text."""
+import os
+import json
 import time
 import logging
 import argparse
@@ -59,6 +61,20 @@ def summarize_chapter_text(chapter_text: str):
     return text_summarizer.summarize_text(chapter_text)
 
 
+def summarize_book(book_path: str):
+    with open(book_path, encoding="utf8") as fp:
+        chap_data = json.load(fp)
+        chapters = [chapter["text"] for chapter in chap_data["chapters"]]
+        book_id = chap_data["book_id"]
+
+    primary_summarizer = SummarizerFactory.create_summarizer("gpt4")
+    secondary_summarizer = SummarizerFactory.create_summarizer("gpt3.5")
+    text_summarizer = TextSummarizer(primary_summarizer, secondary_summarizer)
+
+    summary = text_summarizer.summarize_chapters(chapters, book_id)
+    print(json.dumps(summary, indent=4, sort_keys=False))
+
+
 if __name__ == "__main__":  # pragma: no cover
     logging.basicConfig(
         # filename="gpt-log.txt",
@@ -73,7 +89,10 @@ if __name__ == "__main__":  # pragma: no cover
     logger.info(f"Input args: {vars(args)}")
 
     # summarize_chapter(args.chapter_dir, args.summary_dir)
-    summarize_chapter_batch(
-        os.path.join(BOOKSUM_DIR, "booksum-10chapt.jsonl"),
-        os.path.join(BOOKSUM_DIR, "booksum-10chapt-sum.jsonl")
-    )
+    # summarize_chapter_batch(
+    #     os.path.join(BOOKSUM_DIR, "booksum-10chapt.jsonl"),
+    #     os.path.join(BOOKSUM_DIR, "booksum-10chapt-sum.jsonl")
+    # )
+    start_time = time.perf_counter()
+    summarize_book(os.path.join(CHAPTER_DIR, "1232-chapters_19.txt.json"))
+    logger.info(f"Execution time: {(time.perf_counter() - start_time) / 60:.2f} mins")

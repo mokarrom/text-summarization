@@ -6,14 +6,11 @@ import threading
 import traceback
 import flask
 import logging
-from typing import Dict
+from typing import Dict, List
 from summarizer.model.summarizer import SummarizerFactory, TextSummarizer
 
 prefix = "/opt/ml/"
 model_path = os.path.join(prefix, "model")
-
-TEXT_FIELD = "text"
-SUMMARY_FIELD = "summary"
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -37,12 +34,15 @@ class SummarizerService(object):
         if cls._summarizer is None:
             with cls._lock:
                 if not cls._summarizer:
-                    cls._summarizer = TextSummarizer(SummarizerFactory.create_summarizer("gpt3"))
+                    cls._summarizer = TextSummarizer(
+                        primary_summarizer=SummarizerFactory.create_summarizer("gpt4"),
+                        secondary_summarizer=SummarizerFactory.create_summarizer("gpt3.5")
+                    )
                     logger.info(f"Process id: {pid} - Initialized Summarizer!")
         return cls._summarizer
 
     @classmethod
-    def summarize(cls, long_text: str, doc_id: str) -> str:
+    def summarize(cls, chapters: List[str], doc_id) -> Dict[str, str]:
         """For the given long text, summarize it.
 
         Args:
@@ -53,7 +53,7 @@ class SummarizerService(object):
             summary_text (str): summary of the long text.
             """
         summarizer = cls.get_summarizer()
-        return summarizer.summarize_text(long_text, doc_id)
+        return summarizer.summarize_chapters(chapters, doc_id)
 
 
 # The flask app for serving predictions
@@ -99,30 +99,40 @@ def summarization():
     if flask.request.content_type == 'application/json':
         payload: str = flask.request.data.decode('utf-8')
     else:
+        error = {"status_code": 415, "error_message": "Invalid request data type, only json is supported)"}
         return flask.Response(
-            response='Invalid request data type, only json is supported.',
+            response=json.dumps(error),
             status=415,
-            mimetype='text/plain'
+            mimetype="application/json"
         )
 
     try:
         data_dict: Dict = json.loads(payload)
-        if TEXT_FIELD not in data_dict:
-            app.logger.error(f"The request must contain '{TEXT_FIELD}' field!")
+        if "chapters" not in data_dict or not data_dict["chapters"] and "text" not in data_dict["chapters"][0]:
+            app.logger.error("The request must contain 'chapters' list (and 'text' field)")
+            error = {"status_code": 400, "error_message": "The request must contain 'chapters' list (and 'text' fields)"}
             return flask.Response(
-                response=f"The request must contain '{TEXT_FIELD}' field", status=400, mimetype="text/plain"
+                response=json.dumps(error),
+                status=400,
+                mimetype="application/json"
             )
         else:
-            text = data_dict[TEXT_FIELD]
-            doc_id = data_dict.get("doc_id", "n/a")
-            app.logger.info(f"Summarizing text length: {len(text)} of document: {doc_id}")
-            summary = SummarizerService.summarize(text, doc_id)
-            resp_json = json.dumps({SUMMARY_FIELD: summary})
+            chapters_list = sorted(data_dict["chapters"], key=lambda x: x["id"])
+            chapters = [chapter["text"] for chapter in chapters_list]
+            book_id = data_dict.get("book_id", "n/a")
+            app.logger.info(f"Summarizing {len(chapters)} chapters of document: {book_id}")
+            summary = SummarizerService.summarize(chapters, book_id)
+            summary["book_id"] = book_id
+            resp_json = json.dumps(summary)
             return flask.Response(response=resp_json, status=200, mimetype="application/json")
     except Exception as ex:
         err_msg = f"Algorithm error: {type(ex)}; message: {ex.args}; error: {traceback.format_exc()}"
         app.logger.error(err_msg)
-        return flask.Response(response=err_msg, status=500, mimetype="text/plain")
+        return flask.Response(
+            response=json.dumps({"status_code": 500, "error_message": err_msg}),
+            status=500,
+            mimetype="application/json"
+        )
 
 
 def main():  # pragma: no cover

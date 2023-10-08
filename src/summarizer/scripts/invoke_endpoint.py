@@ -1,16 +1,50 @@
 """A python script to hit a SageMaker endpoint."""
 import os
 import sys
+import time
 import json
 import jsonlines
 import boto3
 import logging
 import argparse as ap
+from typing import Dict
 from summarizer.util import SRC_RESOURCES_DIR
+from botocore.config import Config
 
 BOOKSUM_DIR = os.path.join(SRC_RESOURCES_DIR, "booksum")
-ENDPOINT_NAME = "chpater-sum-gpt3-endpoint"
+CHAPTER_DIR = os.path.join(SRC_RESOURCES_DIR, "chapter")
+ENDPOINT_NAME = "chpater-sum-gpt3-apr23-endpoint"
+config = Config(
+    read_timeout=300,
+    retries={"max_attempts": 0},  # This value can be adjusted to 5 to go up to the 360s max timeout
+)
 SM_RUNTIME = boto3.client("sagemaker-runtime")
+
+
+def invoke_sm_endpoint_v2(endpoint_name: str, data: Dict) -> str:
+    """Invoke the endpoint for the given data and return the response."""
+    payload_json = json.dumps(data)
+
+    response = SM_RUNTIME.invoke_endpoint(
+        EndpointName=endpoint_name,
+        Body=payload_json.encode('utf-8'),
+        ContentType="application/json",
+        Accept="application/json"
+    )
+    response_body = response["Body"].read().decode("utf-8")
+    summary = json.loads(response_body)
+    return summary
+
+
+def summarize_book_endpoint(endpoint_name: str, input_file: str, output_file: str):
+    with open(input_file, encoding="utf8") as fp:
+        chap_data = json.load(fp)
+
+    summary = invoke_sm_endpoint_v2(endpoint_name, chap_data)
+    logger.info(json.dumps(summary, indent=4, sort_keys=False))
+
+    with open(output_file, encoding="utf8", mode="w") as fp:
+        json.dump(summary, fp)
 
 
 def invoke_sm_endpoint(endpoint_name: str, long_text: str, doc_id: str) -> str:
@@ -55,12 +89,12 @@ def _get_args(args):
     )
     parser.add_argument(
         "--input_file", type=str, metavar="input-file",
-        default=os.path.join(BOOKSUM_DIR, "booksum-10chapt.jsonl"),
+        default=os.path.join(CHAPTER_DIR, "1232-chapters_19.txt.json"),
         help="A JSON Lines input file where each line is a JSON object."
     )
     parser.add_argument(
         "--output_file", type=str, metavar="input-file",
-        default=os.path.join(BOOKSUM_DIR, "booksum-10chapt-sum.jsonl"),
+        default=os.path.join(CHAPTER_DIR, "61-chapters-sum.json"),
         help="A JSON Lines output file where each line is a JSON object."
     )
 
@@ -73,9 +107,12 @@ def main(args):
     logging.info(f"Provided args: {args}")
 
     try:
-        summarize_chapters_endpoint(args.endpoint_name, args.input_file, args.output_file)
+        start_time = time.perf_counter()
+        summarize_book_endpoint(args.endpoint_name, args.input_file, args.output_file)
     except Exception as error:
         logging.error(f"Error while invoking the endpoint: {str(error)}")
+    finally:
+        logger.info(f"Execution time: {(time.perf_counter() - start_time) / 60:.2f} mins")
 
 
 if __name__ == "__main__":

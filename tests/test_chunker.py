@@ -1,8 +1,8 @@
 import os
+import json
 from nltk.tokenize import sent_tokenize
-
 from summarizer.dao.chunker import paragraphs, TextChunker
-from summarizer.model.gpt3_summarizer import count_tokens
+from summarizer.model.gpt_summarizer import count_tokens, count_tokens_v2
 
 
 def test_paragraphs(sample_file):
@@ -74,6 +74,37 @@ def test_chunk_generator_from_text(resource_path):
     assert len(chunk_words) == len(words)
 
 
+def test_chunk_generator_from_chapters(resource_path):
+    file_path = os.path.join(resource_path, "chapter", "1232-chapters_19.txt.json")
+
+    with open(file_path) as fp:
+        chap_data = json.load(fp)
+
+    chapters = [chapter["text"] for chapter in chap_data["chapters"]]
+    full_book = "".join(chapters)
+
+    chunker = TextChunker(num_of_tokens=500)
+    chunks = [chunk for chunk in chunker.chunk_generator_from_chapters(chapters, "n/a")]
+    assert len(chunks) == 12
+
+    chunk_words = []
+    for chunk in chunks:
+        chunk_words.extend(chunk.text().split())
+        assert chunk.num_of_tokens <= chunker.max_tokens
+        assert chunk.document_id == "n/a"
+        # assert chunk.num_of_tokens == count_tokens_v2(chunk.text())
+    chunk_text = " ".join(chunk_words)
+
+    words = full_book.split()
+    clean_text = " ".join(words)
+    print(f"\nNumber of words in full text: {len(words)}")
+    print(f"Number of tokens in raw text: {count_tokens_v2(full_book)}")
+    print(f"Number of tokens in clean text: {count_tokens_v2(clean_text)}")
+
+    assert chunk_text == clean_text
+    assert len(chunk_words) == len(words)
+
+
 def test_large_paragraph_chunking():
     para_text = "While running on the entire test set, I notice, rarely, there is a paragraph which is greater than " \
                 "our max_tokens. Currently, for those excessively long paragraphs, we through an exception " \
@@ -123,3 +154,17 @@ def test_sentence_splitter():
     assert len(sent_tokenize(sample_3)) == 5
     assert len(sent_tokenize(sample_4)) == 5
     assert len(sent_tokenize(sample_5)) == 1
+
+
+def test_output():
+    import re
+    sample_resp = "Intro: This is intro.\n\nConclusion: This is conclusion."
+    try:
+        intro = re.search("Intro: (.+?)\n\nConclusion:", sample_resp).group(1)
+        conclusion = sample_resp.split("\n\nConclusion: ")[-1]
+    except AttributeError:
+        intro = ""
+
+    assert intro == "This is intro."
+    assert conclusion == "This is conclusion."
+
