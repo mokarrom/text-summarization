@@ -1,0 +1,7 @@
+.idea/
+**/.env
+src/summarizer/resources/summary/
+venv/
+**/__pycache__/
+.python-version
+**/.ipynb_checkpoints/

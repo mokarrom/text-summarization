@@ -1,0 +1,46 @@
+This is a test file generated for testing our chunking algorithm.
+
+
+
+The chunking algorithm takes an input file and generates text chunks. A chunk is a set of paragraphs where the
+length of a chunk is less than or equal to the maximum token length.
+
+A paragraph is a set of sentences. Paragraphs are identified by an empty new line in the text file.
+
+
+
+This is a test one line paragraph.
+
+
+
+A helpful rule of thumb is that one token generally corresponds to ~4 characters of text for common English text.
+This translates to roughly ¾ of a word (so 100 tokens ~= 75 words).
+
+The GPT family of models process text using tokens, which are common sequences of characters found in text.
+The models understand the statistical relationships between these tokens, and excel at producing the next
+token in a sequence of tokens.
+
+You can use the tool below to understand how a piece of text would be tokenized by the API, and the total
+count of tokens in that piece of text.
+
+The maximum number of tokens to generate in the completion.
+
+
+While running on the entire test set, I notice, rarely, there is a paragraph which is greater than our max_tokens. Currently, for those excessively long paragraphs, we through an exception (RuntimeError: Too long paragraph, tokens: 2378, max_tokens: 1836). Please let me know if that's okay or do you wanna process them by splitting into multiple chunks? I'd rather have a solution for this in place than throw an error. When a paragraph is longer than max tokens (which indeed seems very unlikely to happen often) let's just split such paragraph into separate chunks where we use a sentence to break up the chunks (dots as opposed to line-breaks). In the ideal scenario we shouldn't have errors so let's try to prevent them. So we have decided to split long paragraph into multiple chunks. In this special case a chunk will consist of a set of sentences where a sentence is define by period. So a sentence can't be part of two chunks, either we will include the sentence or save it for the next chunk. We will not mixed up long paragraph with small paragraph.
+
+
+The token count of your prompt plus max_tokens cannot exceed the model's context length. Most models have a
+context length of 2048 tokens (except for the newest models, which support 4096).
+
+
+
+We're taking a chapter (TXT file, paragraphs are separated by the newline) as input to the system. After that,
+we will prepare a set of chunks where each chunk consists of a set of paragraphs and the total tokens of a chunk
+will be less than the given threshold.
+
+We will be sending each chunk to the system and recording the summary of the chunk. Finally concatenating all chunks
+summary to get the chapter summary, return the chapter summary as system output.
+
+And this is the last sentence of test. This test sample answers twos questions:
+How are we splitting a chapter into chunks?
+How are we splitting a (large) paragraph into sentences (chunks)?

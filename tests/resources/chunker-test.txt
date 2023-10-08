@@ -1,0 +1,43 @@
+This is a test file generated for testing our chunking algorithm.
+
+
+
+The chunking algorithm takes an input file and generates text chunks. A chunk is a set of paragraphs where the
+length of a chunk is less than or equal to the maximum token length.
+
+A paragraph is a set of sentences. Paragraphs are identified by an empty new line in the text file.
+
+
+
+This is a test one line paragraph.
+
+
+
+A helpful rule of thumb is that one token generally corresponds to ~4 characters of text for common English text.
+This translates to roughly ¾ of a word (so 100 tokens ~= 75 words).
+
+The GPT family of models process text using tokens, which are common sequences of characters found in text.
+The models understand the statistical relationships between these tokens, and excel at producing the next
+token in a sequence of tokens.
+
+You can use the tool below to understand how a piece of text would be tokenized by the API, and the total
+count of tokens in that piece of text.
+
+The maximum number of tokens to generate in the completion.
+
+
+
+
+The token count of your prompt plus max_tokens cannot exceed the model's context length. Most models have a
+context length of 2048 tokens (except for the newest models, which support 4096).
+
+
+
+We're taking a chapter (TXT file, paragraphs are separated by the newline) as input to the system. After that,
+we will prepare a set of chunks where each chunk consists of a set of paragraphs and the total tokens of a chunk
+will be less than the given threshold.
+
+We will be sending each chunk to the system and recording the summary of the chunk. Finally concatenating all chunks
+summary to get the chapter summary, return the chapter summary as system output.
+
+
